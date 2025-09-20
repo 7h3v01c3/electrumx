@@ -2910,15 +2910,37 @@ class Divi(Coin):
 
     @classmethod
     def header_hash(cls, header):
-        '''DIVI uses double SHA256 on the full 112-byte header'''
-        # Based on debug output, DIVI uses double SHA256 on the full 112-byte header
-        # This includes the acc_checkpoint field in the hash calculation
-        if len(header) < 112:
-            raise ValueError(f"DIVI header too short: {len(header)} bytes, expected 112")
+        '''DIVI uses different hashing methods for genesis vs other blocks'''
+        if len(header) < 80:
+            raise ValueError(f"DIVI header too short: {len(header)} bytes, expected at least 80")
         
-        # Use double SHA256 on the full 112-byte header
-        from electrumx.lib.hash import double_sha256
-        return double_sha256(header)
+        # Check if this is the genesis block by looking at the prevhash (all zeros)
+        prevhash = header[4:36]  # prevhash is at bytes 4-36
+        is_genesis = all(b == 0 for b in prevhash)
+        
+        if is_genesis:
+            # Genesis block uses Quark hash on 80-byte header only
+            if len(header) < 80:
+                raise ValueError(f"Genesis header too short: {len(header)} bytes, expected 80")
+            
+            try:
+                import quark_hash
+                return quark_hash.getPoWHash(header[:80])
+            except ImportError:
+                try:
+                    import pivx_quark_hash as quark_hash
+                    return quark_hash.getPoWHash(header[:80])
+                except ImportError:
+                    # Fallback to double SHA256
+                    from electrumx.lib.hash import double_sha256
+                    return double_sha256(header[:80])
+        else:
+            # Other blocks use double SHA256 on full 112-byte header
+            if len(header) < 112:
+                raise ValueError(f"Non-genesis header too short: {len(header)} bytes, expected 112")
+            
+            from electrumx.lib.hash import double_sha256
+            return double_sha256(header)
     
     @classmethod
     def _divi_hash_quark(cls, data):
