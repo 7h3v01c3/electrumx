@@ -2911,7 +2911,7 @@ class Divi(Coin):
     @classmethod
     def header_hash(cls, header):
         '''DIVI uses Quark Hash'''
-        import quark_hash
+        import pivx_quark_hash as quark_hash
         return quark_hash.getPoWHash(header)
 
 class Pivx(Coin):
