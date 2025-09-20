@@ -270,6 +270,15 @@ class BlockProcessor:
                     self.logger.warning(f'  header prevhash: {hash_to_hex_str(self.coin.header_prevhash(header))}')
                     self.logger.warning(f'  header hash: {hash_to_hex_str(self.coin.header_hash(header))}')
                     self.logger.warning(f'  header hex (first 80 bytes): {header[:80].hex()}')
+                    self.logger.warning(f'  header hex (last 32 bytes - acc_checkpoint): {header[80:112].hex()}')
+                    self.logger.warning(f'  header hex (full 112 bytes): {header.hex()}')
+                    
+                    # Test different hashing approaches
+                    from electrumx.lib.hash import double_sha256
+                    standard_hash = double_sha256(header[:80])
+                    self.logger.warning(f'  standard 80-byte hash: {hash_to_hex_str(standard_hash)}')
+                    full_hash = double_sha256(header)
+                    self.logger.warning(f'  full 112-byte double SHA256: {hash_to_hex_str(full_hash)}')
             await self.prefetcher.reset_height(self.height)
 
     async def reorg_chain(self, count=None):
