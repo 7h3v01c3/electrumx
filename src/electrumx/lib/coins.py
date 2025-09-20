@@ -2910,16 +2910,27 @@ class Divi(Coin):
 
     @classmethod
     def header_hash(cls, header):
-        '''DIVI uses custom HashQuark implementation on the full 112-byte header'''
-        # DIVI uses a custom Quark hash implementation that differs from standard Quark
-        # We need to implement the exact algorithm from DIVI core
+        '''DIVI uses Quark hash on the standard 80-byte header only'''
+        # Based on the debug output, it seems DIVI might hash only the first 80 bytes
+        # like standard Bitcoin, not the full 112-byte header
+        if len(header) < 80:
+            raise ValueError(f"DIVI header too short: {len(header)} bytes")
+        
+        # Use only the first 80 bytes for hashing (standard Bitcoin header)
+        standard_header = header[:80]
+        
         try:
-            # Try to use a DIVI-specific Quark implementation if available
-            import divi_quark_hash
-            return divi_quark_hash.getPoWHash(header)
+            # Try standard Quark hash on 80-byte header
+            import quark_hash
+            return quark_hash.getPoWHash(standard_header)
         except ImportError:
-            # Fallback: implement the DIVI HashQuark algorithm directly
-            return cls._divi_hash_quark(header)
+            try:
+                import pivx_quark_hash as quark_hash
+                return quark_hash.getPoWHash(standard_header)
+            except ImportError:
+                # Fallback to double SHA256
+                from electrumx.lib.hash import double_sha256
+                return double_sha256(standard_header)
     
     @classmethod
     def _divi_hash_quark(cls, data):
