@@ -265,20 +265,23 @@ class BlockProcessor:
                 self.logger.warning(f'  height: {self.height}')
                 # Log header details for debugging
                 if headers:
-                    header = headers[0]
-                    self.logger.warning(f'  header length: {len(header)}')
-                    self.logger.warning(f'  header prevhash: {hash_to_hex_str(self.coin.header_prevhash(header))}')
-                    self.logger.warning(f'  header hash: {hash_to_hex_str(self.coin.header_hash(header))}')
-                    self.logger.warning(f'  header hex (first 80 bytes): {header[:80].hex()}')
-                    self.logger.warning(f'  header hex (last 32 bytes - acc_checkpoint): {header[80:112].hex()}')
-                    self.logger.warning(f'  header hex (full 112 bytes): {header.hex()}')
-                    
-                    # Test different hashing approaches
-                    from electrumx.lib.hash import double_sha256
-                    standard_hash = double_sha256(header[:80])
-                    self.logger.warning(f'  standard 80-byte hash: {hash_to_hex_str(standard_hash)}')
-                    full_hash = double_sha256(header)
-                    self.logger.warning(f'  full 112-byte double SHA256: {hash_to_hex_str(full_hash)}')
+                    self.logger.warning(f'  Processing {len(headers)} headers in this batch')
+                    for i, header in enumerate(headers[:3]):  # Show first 3 headers
+                        self.logger.warning(f'  Header {i}:')
+                        self.logger.warning(f'    length: {len(header)}')
+                        self.logger.warning(f'    prevhash: {hash_to_hex_str(self.coin.header_prevhash(header))}')
+                        self.logger.warning(f'    hash: {hash_to_hex_str(self.coin.header_hash(header))}')
+                        self.logger.warning(f'    hex (first 80 bytes): {header[:80].hex()}')
+                        if len(header) > 80:
+                            self.logger.warning(f'    hex (last 32 bytes - acc_checkpoint): {header[80:112].hex()}')
+                        
+                        # Test different hashing approaches for this header
+                        from electrumx.lib.hash import double_sha256
+                        standard_hash = double_sha256(header[:80])
+                        self.logger.warning(f'    standard 80-byte hash: {hash_to_hex_str(standard_hash)}')
+                        if len(header) > 80:
+                            full_hash = double_sha256(header)
+                            self.logger.warning(f'    full {len(header)}-byte double SHA256: {hash_to_hex_str(full_hash)}')
             await self.prefetcher.reset_height(self.height)
 
     async def reorg_chain(self, count=None):
