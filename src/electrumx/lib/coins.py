@@ -2910,9 +2910,21 @@ class Divi(Coin):
 
     @classmethod
     def header_hash(cls, header):
-        '''DIVI uses Quark Hash'''
-        import pivx_quark_hash as quark_hash
-        return quark_hash.getPoWHash(header)
+        '''DIVI uses Quark Hash on the first 80 bytes only'''
+        # DIVI only hashes the first 80 bytes (standard Bitcoin header)
+        # The acc_checkpoint field is not included in the hash calculation
+        header_to_hash = header[:80]
+        try:
+            import quark_hash
+            return quark_hash.getPoWHash(header_to_hash)
+        except ImportError:
+            try:
+                import pivx_quark_hash as quark_hash
+                return quark_hash.getPoWHash(header_to_hash)
+            except ImportError:
+                # Fallback to double SHA256 if Quark hash is not available
+                from electrumx.lib.hash import double_sha256
+                return double_sha256(header_to_hash)
     
     @classmethod
     def header_prevhash(cls, header):
