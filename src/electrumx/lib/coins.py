@@ -2919,6 +2919,8 @@ class Divi(Coin):
         '''Given a DIVI header return previous hash'''
         # DIVI header structure: version(4) + prev_hash(32) + merkle_root(32) + timestamp(4) + bits(4) + nonce(4) + acc_checkpoint(32)
         # Previous hash is at bytes 4-36 (same as standard Bitcoin)
+        if len(header) < 36:
+            raise ValueError(f"DIVI header too short: {len(header)} bytes")
         return header[4:36]
     
     @classmethod

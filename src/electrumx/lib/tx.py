@@ -1436,17 +1436,21 @@ class TxPIVX:
 
 class TxDIVI:
     """Class representing a DIVI transaction."""
-    __slots__ = 'version', 'inputs', 'outputs', 'locktime'
+    __slots__ = 'version', 'inputs', 'outputs', 'locktime', 'txid', 'wtxid'
     version: int
     inputs: Sequence['TxInput']
     outputs: Sequence['TxOutput']
     locktime: int
+    txid: bytes
+    wtxid: bytes
 
-    def __init__(self, version, inputs, outputs, locktime):
+    def __init__(self, version, inputs, outputs, locktime, txid=None, wtxid=None):
         self.version = version
         self.inputs = inputs
         self.outputs = outputs
         self.locktime = locktime
+        self.txid = txid
+        self.wtxid = wtxid
 
     def serialize(self):
         return b''.join((
@@ -1463,16 +1467,22 @@ class DeserializerDIVI(Deserializer):
     """Deserializer for DIVI transactions."""
     
     def read_tx(self):
+        start = self.cursor
         version = self._read_le_uint32()
         inputs = self._read_inputs()
         outputs = self._read_outputs()
         locktime = self._read_le_uint32()
         
-        return TxDIVI(version, inputs, outputs, locktime)
+        # Calculate transaction ID
+        txid = self.TX_HASH_FN(self.binary[start:self.cursor])
+        
+        return TxDIVI(version, inputs, outputs, locktime, txid, txid)
     
     def read_header(self, static_header_size):
         """Return the DIVI block header bytes (112 bytes total)."""
         # DIVI has a custom header structure:
         # - Standard 80 bytes: version(4) + prev_hash(32) + merkle_root(32) + timestamp(4) + bits(4) + nonce(4)
         # - Additional 32 bytes: acc_checkpoint
+        if static_header_size != 112:
+            raise ValueError(f"Expected DIVI header size 112, got {static_header_size}")
         return self._read_nbytes(static_header_size)

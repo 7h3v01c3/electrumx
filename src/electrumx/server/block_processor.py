@@ -256,6 +256,20 @@ class BlockProcessor:
             # just to reset the prefetcher and try again.
             self.logger.warning('daemon blocks do not form a chain; '
                                 'resetting the prefetcher')
+            # Add debug logging for DIVI
+            if hasattr(self, 'coin') and self.coin.NAME == 'DIVI':
+                self.logger.warning(f'DIVI chain validation failed:')
+                self.logger.warning(f'  hprevs: {[hash_to_hex_str(h) for h in hprevs[:3]]}')
+                self.logger.warning(f'  chain:  {[hash_to_hex_str(h) for h in chain[:3]]}')
+                self.logger.warning(f'  tip: {hash_to_hex_str(self.tip) if self.tip else "None"}')
+                self.logger.warning(f'  height: {self.height}')
+                # Log header details for debugging
+                if headers:
+                    header = headers[0]
+                    self.logger.warning(f'  header length: {len(header)}')
+                    self.logger.warning(f'  header prevhash: {hash_to_hex_str(self.coin.header_prevhash(header))}')
+                    self.logger.warning(f'  header hash: {hash_to_hex_str(self.coin.header_hash(header))}')
+                    self.logger.warning(f'  header hex (first 80 bytes): {header[:80].hex()}')
             await self.prefetcher.reset_height(self.height)
 
     async def reorg_chain(self, count=None):
