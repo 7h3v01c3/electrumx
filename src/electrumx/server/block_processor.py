@@ -883,12 +883,17 @@ class DiviBlockProcessor(BlockProcessor):
         genesis_activation = self.coin.GENESIS_ACTIVATION
 
         for block in blocks:
-            if height < min_height:
-                # Skip blocks that are too old
-                height += 1
-                continue
-                
-            # Process the block normally - DIVI blocks should work with standard processing
-            # The acc_checkpoint field is handled by the deserializer
-            self.advance_txs(block.transactions, self.is_unspendable)
             height += 1
+            is_unspendable = (is_unspendable_genesis if height >= genesis_activation
+                              else is_unspendable_legacy)
+            undo_info = self.advance_txs(block.transactions, is_unspendable)
+            if height >= min_height:
+                self.undo_infos.append((undo_info, height))
+                self.db.write_raw_block(block.raw, height)
+
+        headers = [block.header for block in blocks]
+        self.height = height
+        self.headers += headers
+        self.tip = self.coin.header_hash(headers[-1])
+        self.tip_advanced_event.set()
+        self.tip_advanced_event.clear()

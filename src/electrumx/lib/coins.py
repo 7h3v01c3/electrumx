@@ -2913,6 +2913,19 @@ class Divi(Coin):
         '''DIVI uses Quark Hash'''
         import pivx_quark_hash as quark_hash
         return quark_hash.getPoWHash(header)
+    
+    @classmethod
+    def header_prevhash(cls, header):
+        '''Given a DIVI header return previous hash'''
+        # DIVI header structure: version(4) + prev_hash(32) + merkle_root(32) + timestamp(4) + bits(4) + nonce(4) + acc_checkpoint(32)
+        # Previous hash is at bytes 4-36 (same as standard Bitcoin)
+        return header[4:36]
+    
+    @classmethod
+    def block_header(cls, block, height):
+        '''Return the DIVI block header bytes'''
+        deserializer = cls.DESERIALIZER(block)
+        return deserializer.read_header(cls.BASIC_HEADER_SIZE)
 
 class Pivx(Coin):
     NAME = "PIVX"

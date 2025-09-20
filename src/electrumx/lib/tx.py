@@ -1469,3 +1469,10 @@ class DeserializerDIVI(Deserializer):
         locktime = self._read_le_uint32()
         
         return TxDIVI(version, inputs, outputs, locktime)
+    
+    def read_header(self, static_header_size):
+        """Return the DIVI block header bytes (112 bytes total)."""
+        # DIVI has a custom header structure:
+        # - Standard 80 bytes: version(4) + prev_hash(32) + merkle_root(32) + timestamp(4) + bits(4) + nonce(4)
+        # - Additional 32 bytes: acc_checkpoint
+        return self._read_nbytes(static_header_size)
