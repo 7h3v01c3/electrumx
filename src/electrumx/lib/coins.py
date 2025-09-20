@@ -2899,6 +2899,7 @@ class Divi(Coin):
     P2SH_VERBYTE = bytes.fromhex("0d")
     WIF_BYTE = bytes.fromhex("d4")
     DESERIALIZER = lib_tx.DeserializerDIVI
+    BLOCK_PROCESSOR = block_proc.DiviBlockProcessor
     TX_COUNT_HEIGHT = 2456784
     TX_COUNT = 2456784
     TX_PER_BLOCK = 2

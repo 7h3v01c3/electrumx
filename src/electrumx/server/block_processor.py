@@ -871,3 +871,24 @@ class LTORBlockProcessor(BlockProcessor):
                 add_touched(hashX)
 
         self.tx_count -= len(txs)
+
+
+class DiviBlockProcessor(BlockProcessor):
+    """Custom block processor for DIVI coin that handles the acc_checkpoint field."""
+    
+    def advance_blocks(self, blocks: Sequence['Block']):
+        """Override to handle DIVI's custom block structure."""
+        min_height = self.db.min_undo_height(self.daemon.cached_height())
+        height = self.height
+        genesis_activation = self.coin.GENESIS_ACTIVATION
+
+        for block in blocks:
+            if height < min_height:
+                # Skip blocks that are too old
+                height += 1
+                continue
+                
+            # Process the block normally - DIVI blocks should work with standard processing
+            # The acc_checkpoint field is handled by the deserializer
+            self.advance_txs(block.transactions, self.is_unspendable)
+            height += 1
