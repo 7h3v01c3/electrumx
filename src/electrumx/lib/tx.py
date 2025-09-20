@@ -1442,6 +1442,12 @@ class TxDIVI:
     outputs: Sequence['TxOutput']
     locktime: int
 
+    def __init__(self, version, inputs, outputs, locktime):
+        self.version = version
+        self.inputs = inputs
+        self.outputs = outputs
+        self.locktime = locktime
+
     def serialize(self):
         return b''.join((
             pack_le_uint32(self.version),
