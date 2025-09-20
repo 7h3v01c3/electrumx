@@ -2908,6 +2908,12 @@ class Divi(Coin):
     RPC_PORT = 51473
     REORG_LIMIT = 100
 
+    @classmethod
+    def header_hash(cls, header):
+        '''DIVI uses Quark Hash'''
+        import quark_hash
+        return quark_hash.getPoWHash(header)
+
 class Pivx(Coin):
     NAME = "PIVX"
     SHORTNAME = "PIVX"
