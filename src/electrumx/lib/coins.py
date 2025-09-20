@@ -2904,6 +2904,7 @@ class Divi(Coin):
     TX_COUNT = 2456784
     TX_PER_BLOCK = 2
     STATIC_BLOCK_HEADERS = True
+    BASIC_HEADER_SIZE = 112  # 80 bytes standard + 32 bytes acc_checkpoint
     RPC_PORT = 51473
     REORG_LIMIT = 100
 
