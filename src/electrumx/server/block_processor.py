@@ -256,6 +256,32 @@ class BlockProcessor:
             # just to reset the prefetcher and try again.
             self.logger.warning('daemon blocks do not form a chain; '
                                 'resetting the prefetcher')
+            # Add debug logging for DIVI
+            if hasattr(self, 'coin') and self.coin.NAME == 'DIVI':
+                self.logger.warning(f'DIVI chain validation failed:')
+                self.logger.warning(f'  hprevs: {[hash_to_hex_str(h) for h in hprevs[:3]]}')
+                self.logger.warning(f'  chain:  {[hash_to_hex_str(h) for h in chain[:3]]}')
+                self.logger.warning(f'  tip: {hash_to_hex_str(self.tip) if self.tip else "None"}')
+                self.logger.warning(f'  height: {self.height}')
+                # Log header details for debugging
+                if headers:
+                    self.logger.warning(f'  Processing {len(headers)} headers in this batch')
+                    for i, header in enumerate(headers[:3]):  # Show first 3 headers
+                        self.logger.warning(f'  Header {i}:')
+                        self.logger.warning(f'    length: {len(header)}')
+                        self.logger.warning(f'    prevhash: {hash_to_hex_str(self.coin.header_prevhash(header))}')
+                        self.logger.warning(f'    hash: {hash_to_hex_str(self.coin.header_hash(header))}')
+                        self.logger.warning(f'    hex (first 80 bytes): {header[:80].hex()}')
+                        if len(header) > 80:
+                            self.logger.warning(f'    hex (last 32 bytes - acc_checkpoint): {header[80:112].hex()}')
+                        
+                        # Test different hashing approaches for this header
+                        from electrumx.lib.hash import double_sha256
+                        standard_hash = double_sha256(header[:80])
+                        self.logger.warning(f'    standard 80-byte hash: {hash_to_hex_str(standard_hash)}')
+                        if len(header) > 80:
+                            full_hash = double_sha256(header)
+                            self.logger.warning(f'    full {len(header)}-byte double SHA256: {hash_to_hex_str(full_hash)}')
             await self.prefetcher.reset_height(self.height)
 
     async def reorg_chain(self, count=None):
@@ -871,3 +897,29 @@ class LTORBlockProcessor(BlockProcessor):
                 add_touched(hashX)
 
         self.tx_count -= len(txs)
+
+
+class DiviBlockProcessor(BlockProcessor):
+    """Custom block processor for DIVI coin that handles the acc_checkpoint field."""
+    
+    def advance_blocks(self, blocks: Sequence['Block']):
+        """Override to handle DIVI's custom block structure."""
+        min_height = self.db.min_undo_height(self.daemon.cached_height())
+        height = self.height
+        genesis_activation = self.coin.GENESIS_ACTIVATION
+
+        for block in blocks:
+            height += 1
+            is_unspendable = (is_unspendable_genesis if height >= genesis_activation
+                              else is_unspendable_legacy)
+            undo_info = self.advance_txs(block.transactions, is_unspendable)
+            if height >= min_height:
+                self.undo_infos.append((undo_info, height))
+                self.db.write_raw_block(block.raw, height)
+
+        headers = [block.header for block in blocks]
+        self.height = height
+        self.headers += headers
+        self.tip = self.coin.header_hash(headers[-1])
+        self.tip_advanced_event.set()
+        self.tip_advanced_event.clear()
