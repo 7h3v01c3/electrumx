@@ -900,7 +900,7 @@ class LTORBlockProcessor(BlockProcessor):
 
 
 class DiviBlockProcessor(BlockProcessor):
-    """Custom block processor for DIVI coin that handles the acc_checkpoint field."""
+    """Custom block processor for DIVI coin that handles vault transactions and acc_checkpoint field."""
     
     def advance_blocks(self, blocks: Sequence['Block']):
         """Override to handle DIVI's custom block structure."""
@@ -923,3 +923,97 @@ class DiviBlockProcessor(BlockProcessor):
         self.tip = self.coin.header_hash(headers[-1])
         self.tip_advanced_event.set()
         self.tip_advanced_event.clear()
+
+    def advance_txs(self, txs: Sequence[Tx], is_unspendable: Callable[[bytes], bool]) -> Sequence[bytes]:
+        """Override to handle DIVI vault transactions with special indexing."""
+        # Call parent method first to handle standard processing
+        result = super().advance_txs(txs, is_unspendable)
+        
+        # Additional vault-specific processing
+        self._process_vault_transactions(txs, is_unspendable)
+        
+        return result
+
+    def _process_vault_transactions(self, txs: Sequence[Tx], is_unspendable: Callable[[bytes], bool]):
+        """Process vault transactions for additional indexing and metadata storage."""
+        from electrumx.lib.coins import Divi
+        
+        # Use local vars for speed
+        update_touched = self.touched.update
+        hashXs_by_tx = []
+        append_hashXs = hashXs_by_tx.append
+        
+        tx_num = self.tx_count - len(txs)
+        
+        for tx in txs:
+            hashXs = []
+            append_hashX = hashXs.append
+            
+            # Check if this transaction has vault outputs
+            has_vault_outputs = False
+            vault_metadata = {
+                'owner_key': None,
+                'host_key': None,
+                'vault_count': 0
+            }
+            
+            # Process outputs for vault detection
+            for txout in tx.outputs:
+                # Skip unspendable outputs
+                if is_unspendable(txout.pk_script):
+                    continue
+                
+                # Check if this is a vault output
+                if hasattr(txout, 'script_type') and txout.script_type == 'vault':
+                    has_vault_outputs = True
+                    vault_metadata['vault_count'] += 1
+                    
+                    # Store vault metadata
+                    if hasattr(txout, 'vault_owner') and txout.vault_owner:
+                        vault_metadata['owner_key'] = txout.vault_owner
+                    if hasattr(txout, 'vault_host') and txout.vault_host:
+                        vault_metadata['host_key'] = txout.vault_host
+                    
+                    # For vault outputs, we need to index both owner and host keys
+                    # Owner key is already handled by the parent method via hashX_from_script
+                    # Here we add the host key for additional indexing
+                    
+                    if hasattr(txout, 'vault_host') and txout.vault_host:
+                        try:
+                            # Convert host address to hashX for indexing
+                            host_hashX = self.coin.address_to_hashX(txout.vault_host)
+                            append_hashX(host_hashX)
+                            
+                            # Log vault transaction for debugging
+                            self.logger.debug(f'Vault transaction detected: '
+                                            f'owner={txout.vault_owner}, '
+                                            f'host={txout.vault_host}, '
+                                            f'txid={tx.txid.hex()}')
+                        except Exception as e:
+                            self.logger.warning(f'Failed to process vault host address {txout.vault_host}: {e}')
+            
+            # Store vault metadata for enhanced balance responses
+            if has_vault_outputs:
+                self._store_vault_metadata(tx.txid, vault_metadata)
+            
+            append_hashXs(hashXs)
+            update_touched(hashXs)
+            tx_num += 1
+        
+        # Add vault-specific hashXs to history for additional indexing
+        if hashXs_by_tx:
+            self.db.history.add_unflushed(hashXs_by_tx, self.tx_count - len(txs))
+
+    def _store_vault_metadata(self, txid: bytes, vault_metadata: dict):
+        """Store vault metadata for enhanced balance responses.
+        
+        This could be stored in a separate database table or cache
+        for quick retrieval during balance queries.
+        """
+        # For now, just log the metadata
+        # In a full implementation, this would store to a vault_metadata table
+        self.logger.debug(f'Storing vault metadata for {txid.hex()}: {vault_metadata}')
+        
+        # TODO: Implement vault metadata storage
+        # This would enable the HTTP wrapper to quickly determine
+        # vault vs regular transaction breakdown for addresses

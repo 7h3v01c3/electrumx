@@ -2943,6 +2943,192 @@ class Divi(Coin):
             return double_sha256(header)
     
     @classmethod
+    def is_vault_script(cls, script):
+        '''Check if a script is a DIVI vault script.
+        
+        Vault script pattern:
+        OP_IF <owner_hash160> OP_ELSE OP_REQUIRE_COINSTAKE <host_hash160> OP_ENDIF OP_OVER OP_HASH160 OP_EQUALVERIFY OP_CHECKSIG
+        
+        Hex pattern: 63 14 <20 bytes> 67 b9 14 <20 bytes> 68 78 a9 88 ac
+        '''
+        if len(script) != 50:  # Expected vault script length
+            return False
+            
+        # Check for exact vault script pattern
+        return (script[0] == 0x63 and  # OP_IF
+                script[1] == 0x14 and  # OP_PUSHDATA(20)
+                script[22] == 0x67 and # OP_ELSE
+                script[23] == 0xb9 and # OP_REQUIRE_COINSTAKE
+                script[24] == 0x14 and # OP_PUSHDATA(20)
+                script[45] == 0x68 and # OP_ENDIF
+                script[46] == 0x78 and # OP_OVER
+                script[47] == 0xa9 and # OP_EQUALVERIFY
+                script[48] == 0x88 and # OP_CHECKSIG
+                script[49] == 0xac)    # Additional byte
+
+    @classmethod
+    def extract_vault_addresses(cls, script):
+        '''Extract owner and host addresses from a vault script.
+        
+        Returns:
+            tuple: (owner_address, host_address) or (None, None) if not a vault script
+        '''
+        if not cls.is_vault_script(script):
+            return None, None
+            
+        try:
+            # Extract owner key hash160 (bytes 2-22)
+            owner_hash160 = script[2:22]
+            # Extract host key hash160 (bytes 25-45)
+            host_hash160 = script[25:45]
+            
+            # Convert hash160 to addresses
+            owner_address = cls.hash160_to_P2PKH_address(owner_hash160)
+            host_address = cls.hash160_to_P2PKH_address(host_hash160)
+            
+            return owner_address, host_address
+        except Exception:
+            return None, None
+
+    @classmethod
+    def hash160_to_P2PKH_address(cls, hash160):
+        '''Convert hash160 to P2PKH address for DIVI'''
+        from electrumx.lib.base58 import encode_check
+        return encode_check(hash160, cls.P2PKH_VERBYTE)
+
+    @classmethod
+    def vault_script_hash(cls, script):
+        '''Generate script hash for vault using owner key only.
+        
+        For vault scripts, we use the owner key (first 20 bytes after OP_IF)
+        to generate the script hash for balance queries.
+        '''
+        if not cls.is_vault_script(script):
+            return None
+            
+        # Extract owner key hash160 (bytes 2-22)
+        owner_hash160 = script[2:22]
+        
+        # Create P2PKH script for owner key
+        owner_script = cls.hash160_to_P2PKH_script(owner_hash160)
+        
+        # Return hashX for the owner script
+        return cls.hashX_from_script(owner_script)
+
+    @classmethod
+    def hashX_from_script(cls, script):
+        '''Override to handle vault scripts specially.
+        
+        For vault scripts, use owner key only for balance queries.
+        For other scripts, use standard behavior.
+        '''
+        if cls.is_vault_script(script):
+            return cls.vault_script_hash(script)
+        else:
+            return super().hashX_from_script(script)
+
+    @classmethod
+    def analyze_transaction_outputs(cls, outputs):
+        '''Analyze transaction outputs to detect vault vs regular transactions.
+        
+        Args:
+            outputs: List of transaction outputs (TxOutputDIVI objects)
+            
+        Returns:
+            dict: Analysis results with vault_balance, spendable_balance, has_vault, has_regular
+        '''
+        vault_balance = 0
+        spendable_balance = 0
+        has_vault = False
+        has_regular = False
+        
+        for output in outputs:
+            if hasattr(output, 'script_type') and output.script_type == 'vault':
+                vault_balance += output.value
+                has_vault = True
+            else:
+                spendable_balance += output.value
+                has_regular = True
+        
+        return {
+            'vault_balance': vault_balance,
+            'spendable_balance': spendable_balance,
+            'has_vault': has_vault,
+            'has_regular': has_regular
+        }
+
+    @classmethod
+    def is_vault_transaction(cls, outputs):
+        '''Check if a transaction contains vault outputs.
+        
+        Args:
+            outputs: List of transaction outputs (TxOutputDIVI objects)
+            
+        Returns:
+            bool: True if transaction has vault outputs
+        '''
+        for output in outputs:
+            if hasattr(output, 'script_type') and output.script_type == 'vault':
+                return True
+        return False
+
+    @classmethod
+    def get_vault_metadata(cls, outputs):
+        '''Extract vault metadata from transaction outputs.
+        
+        Args:
+            outputs: List of transaction outputs (TxOutputDIVI objects)
+            
+        Returns:
+            dict: Vault metadata including owner_key, host_key, vault_count
+        '''
+        vault_metadata = {
+            'owner_key': None,
+            'host_key': None,
+            'vault_count': 0
+        }
+        
+        for output in outputs:
+            if hasattr(output, 'script_type') and output.script_type == 'vault':
+                vault_metadata['vault_count'] += 1
+                if hasattr(output, 'vault_owner') and output.vault_owner:
+                    vault_metadata['owner_key'] = output.vault_owner
+                if hasattr(output, 'vault_host') and output.vault_host:
+                    vault_metadata['host_key'] = output.vault_host
+        
+        return vault_metadata
+
+    @classmethod
+    def analyze_address_history(cls, address, transaction_history, db):
+        '''Analyze address history to determine vault vs regular transaction breakdown.
+        
+        This method would be used by the HTTP wrapper to provide enhanced balance responses.
+        
+        Args:
+            address: DIVI address to analyze
+            transaction_history: List of (tx_hash, height) tuples from ElectrumX
+            db: Database connection for transaction details
+            
+        Returns:
+            dict: Enhanced balance information with vault breakdown
+        '''
+        # This is a placeholder for the HTTP wrapper implementation
+        # The actual implementation would:
+        # 1. Query transaction details for each tx_hash
+        # 2. Parse outputs to detect vault vs regular transactions
+        # 3. Calculate vault_balance vs spendable_balance
+        # 4. Return enhanced response format
+        
+        return {
+            'confirmed': 0,
+            'unconfirmed': 0,
+            'breakdown': {
+                'vault_balance': 0,
+                'spendable_balance': 0
+            }
+        }
+
+    @classmethod
     def _divi_hash_quark(cls, data):
         '''Implement DIVI's custom HashQuark algorithm from core code'''
         # This implements the exact HashQuark function from DIVI core
