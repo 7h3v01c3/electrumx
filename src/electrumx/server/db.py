@@ -762,16 +762,21 @@ class DB:
                 tx_num, = unpack_le_uint64(db_key[-TXNUM_LEN:] + txnum_padding)
                 
                 # Handle both old and new UTXO formats
-                if len(db_value) == 8:
+                # Format: hashX + tx_numb + value [+ vault_flag]
+                expected_old_len = HASHX_LEN + TXNUM_LEN + 8  # hashX + tx_numb + value
+                expected_new_len = expected_old_len + 1  # + vault_flag
+                
+                if len(db_value) == expected_old_len:
                     # Old format - assume regular UTXO
-                    value, = unpack_le_uint64(db_value)
+                    value, = unpack_le_uint64(db_value[-8:])  # Last 8 bytes are the value
                     is_vault = False
-                elif len(db_value) == 9:
+                elif len(db_value) == expected_new_len:
                     # New format - read vault flag
-                    value, vault_flag = unpack('<QB', db_value)
+                    value, = unpack_le_uint64(db_value[-9:-1])  # 8 bytes before the last byte
+                    vault_flag = db_value[-1]  # Last byte is the vault flag
                     is_vault = bool(vault_flag)
                 else:
-                    raise ValueError(f"Invalid UTXO value length: {len(db_value)}")
+                    raise ValueError(f"Invalid UTXO value length: {len(db_value)}, expected {expected_old_len} or {expected_new_len}")
                 
                 tx_hash, height = self.fs_tx_hash(tx_num)
                 utxos_append(UTXO(tx_num, txout_idx, tx_hash, height, value, is_vault))
