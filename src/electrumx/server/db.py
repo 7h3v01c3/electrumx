@@ -28,6 +28,7 @@ from electrumx.lib.util import (
     formatted_time, pack_be_uint16, pack_be_uint32, pack_le_uint64, pack_le_uint32,
     unpack_le_uint32, unpack_be_uint32, unpack_le_uint64
 )
+from struct import unpack
 from electrumx.server.storage import db_class, Storage
 from electrumx.server.history import History, TXNUM_LEN
 
@@ -42,6 +43,7 @@ class UTXO:
     tx_hash: bytes   # txid
     height: int      # block height
     value: int       # in satoshis
+    is_vault: bool   # vault flag (True if vault UTXO, False if regular)
 
 
 @attr.s(slots=True)
@@ -753,14 +755,26 @@ class DB:
             utxos_append = utxos.append
             txnum_padding = bytes(8-TXNUM_LEN)
             # Key: b'u' + address_hashX + txout_idx + tx_num
-            # Value: the UTXO value as a 64-bit unsigned integer
+            # Value: the UTXO value as a 64-bit unsigned integer + vault flag
             prefix = b'u' + hashX
             for db_key, db_value in self.utxo_db.iterator(prefix=prefix):
                 txout_idx, = unpack_le_uint32(db_key[-TXNUM_LEN-4:-TXNUM_LEN])
                 tx_num, = unpack_le_uint64(db_key[-TXNUM_LEN:] + txnum_padding)
-                value, = unpack_le_uint64(db_value)
+                
+                # Handle both old and new UTXO formats
+                if len(db_value) == 8:
+                    # Old format - assume regular UTXO
+                    value, = unpack_le_uint64(db_value)
+                    is_vault = False
+                elif len(db_value) == 9:
+                    # New format - read vault flag
+                    value, vault_flag = unpack('<QB', db_value)
+                    is_vault = bool(vault_flag)
+                else:
+                    raise ValueError(f"Invalid UTXO value length: {len(db_value)}")
+                
                 tx_hash, height = self.fs_tx_hash(tx_num)
-                utxos_append(UTXO(tx_num, txout_idx, tx_hash, height, value))
+                utxos_append(UTXO(tx_num, txout_idx, tx_hash, height, value, is_vault))
             return utxos
 
         while True:

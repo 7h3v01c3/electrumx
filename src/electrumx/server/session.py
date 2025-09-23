@@ -1227,10 +1227,23 @@ class ElectrumX(SessionBase):
 
     async def get_balance(self, hashX):
         utxos = await self.db.all_utxos(hashX)
-        confirmed = sum(utxo.value for utxo in utxos)
+        
+        # Calculate vault vs regular balances
+        vault_balance = sum(utxo.value for utxo in utxos if utxo.is_vault)
+        spendable_balance = sum(utxo.value for utxo in utxos if not utxo.is_vault)
+        confirmed = vault_balance + spendable_balance
+        
         unconfirmed = await self.mempool.balance_delta(hashX)
         self.bump_cost(1.0 + len(utxos) / 50)
-        return {'confirmed': confirmed, 'unconfirmed': unconfirmed}
+        
+        return {
+            'confirmed': confirmed,
+            'unconfirmed': unconfirmed,
+            'breakdown': {
+                'vault_balance': vault_balance,
+                'spendable_balance': spendable_balance
+            }
+        }
 
     async def scripthash_get_balance(self, scripthash):
         '''Return the confirmed and unconfirmed balance of a scripthash.'''

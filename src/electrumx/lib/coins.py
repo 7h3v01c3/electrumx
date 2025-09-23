@@ -2928,7 +2928,7 @@ class Divi(Coin):
                 return quark_hash.getPoWHash(header[:80])
             except ImportError:
                 try:
-                    import pivx_quark_hash as quark_hash
+        import pivx_quark_hash as quark_hash
                     return quark_hash.getPoWHash(header[:80])
                 except ImportError:
                     # Fallback to double SHA256
