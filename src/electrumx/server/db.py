@@ -762,12 +762,8 @@ class DB:
                 tx_num, = unpack_le_uint64(db_key[-TXNUM_LEN:] + txnum_padding)
                 
                 # Handle both old and new UTXO formats
-                if len(db_value) == 8:
-                    # Original ElectrumX format - just the value
-                    value, = unpack_le_uint64(db_value)
-                    is_vault = False
-                elif len(db_value) == 23:
-                    # Old DIVI format - hashX + tx_numb + value
+                if len(db_value) == 23:
+                    # Original ElectrumX format - hashX + tx_numb + value
                     value, = unpack_le_uint64(db_value[-8:])  # Last 8 bytes are the value
                     is_vault = False
                 elif len(db_value) == 24:
@@ -776,7 +772,7 @@ class DB:
                     vault_flag = db_value[-1]  # Last byte is the vault flag
                     is_vault = bool(vault_flag)
                 else:
-                    raise ValueError(f"Invalid UTXO value length: {len(db_value)}, expected 8, 23, or 24 bytes")
+                    raise ValueError(f"Invalid UTXO value length: {len(db_value)}, expected 23 or 24 bytes")
                 
                 tx_hash, height = self.fs_tx_hash(tx_num)
                 utxos_append(UTXO(tx_num, txout_idx, tx_hash, height, value, is_vault))
