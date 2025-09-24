@@ -1506,7 +1506,7 @@ class DeserializerDIVI(Deserializer):
         
         outputs = []
         for i in range(self._read_varint()):
-            value = self._read_le_int64()
+            value = self._read_le_uint64()
             pk_script = self._read_varbytes()
             
             # Detect script type and extract vault information

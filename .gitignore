@@ -20,3 +20,5 @@
 electrumx-env/
 # Working Files directory
 Working Files/
+# Development notes
+.cursorrules

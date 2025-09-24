@@ -96,7 +96,7 @@ class DB:
         self.history = History()
 
         # Key: b'u' + address_hashX + txout_idx + tx_num
-        # Value: the UTXO value as a 64-bit unsigned integer (in satoshis)
+        # Value: the UTXO value as a 64-bit unsigned integer + vault flag (8 or 9 bytes)
         # "at address, at outpoint, there is a UTXO of value v"
         # ---
         # Key: b'h' + compressed_tx_hash + txout_idx + tx_num
@@ -331,11 +331,21 @@ class DB:
         # New UTXOs
         batch_put = batch.put
         for key, value in flush_data.adds.items():
-            # key: txid+out_idx, value: hashX+tx_num+value_sats
+            # key: txid+out_idx, value: hashX+tx_num+value_sats+vault_flag
             hashX = value[:HASHX_LEN]
             txout_idx = key[-4:]
             tx_num = value[HASHX_LEN: HASHX_LEN+TXNUM_LEN]
-            value_sats = value[-8:]
+            
+            # Handle both old and new UTXO formats
+            if len(value) == HASHX_LEN + TXNUM_LEN + 8:
+                # Old format - just value (8 bytes)
+                value_sats = value[-8:]
+            elif len(value) == HASHX_LEN + TXNUM_LEN + 9:
+                # New format - value + vault_flag (9 bytes)
+                value_sats = value[-9:]  # Keep the vault flag
+            else:
+                raise ValueError(f"Invalid UTXO value length: {len(value)}")
+            
             suffix = txout_idx + tx_num
             batch_put(b'h' + key[:COMP_TXID_LEN] + suffix, hashX)
             batch_put(b'u' + hashX + suffix, value_sats)
@@ -763,20 +773,16 @@ class DB:
                 
                 # Handle both old and new UTXO formats
                 if len(db_value) == 8:
-                    # Very old format - just the value
+                    # Original ElectrumX format - just the value
                     value, = unpack_le_uint64(db_value)
                     is_vault = False
-                elif len(db_value) == 23:
-                    # Original ElectrumX format - hashX + tx_numb + value
-                    value, = unpack_le_uint64(db_value[-8:])  # Last 8 bytes are the value
-                    is_vault = False
-                elif len(db_value) == 24:
-                    # New DIVI format - hashX + tx_numb + value + vault_flag
-                    value, = unpack_le_uint64(db_value[-9:-1])  # 8 bytes before the last byte
-                    vault_flag = db_value[-1]  # Last byte is the vault flag
+                elif len(db_value) == 9:
+                    # New DIVI format - value + vault_flag
+                    value, = unpack_le_uint64(db_value[:8])  # First 8 bytes are the value
+                    vault_flag = db_value[8]  # Last byte is the vault flag
                     is_vault = bool(vault_flag)
                 else:
-                    raise ValueError(f"Invalid UTXO value length: {len(db_value)}, expected 8, 23, or 24 bytes")
+                    raise ValueError(f"Invalid UTXO value length: {len(db_value)}, expected 8 or 9 bytes")
                 
                 tx_hash, height = self.fs_tx_hash(tx_num)
                 utxos_append(UTXO(tx_num, txout_idx, tx_hash, height, value, is_vault))
@@ -826,14 +832,24 @@ class DB:
                     # that new block
                     return None
                 # Key: b'u' + address_hashX + tx_idx + tx_num
-                # Value: the UTXO value as a 64-bit unsigned integer
+                # Value: the UTXO value as a 64-bit unsigned integer + vault flag
                 key = b'u' + hashX + suffix
                 db_value = self.utxo_db.get(key)
                 if not db_value:
                     # This can happen if the DB was updated between
                     # getting the hashXs and getting the UTXOs
                     return None
-                value, = unpack_le_uint64(db_value)
+                
+                # Handle both old and new UTXO formats
+                if len(db_value) == 8:
+                    # Original ElectrumX format - just the value
+                    value, = unpack_le_uint64(db_value)
+                elif len(db_value) == 9:
+                    # New DIVI format - value + vault_flag
+                    value, = unpack_le_uint64(db_value[:8])  # First 8 bytes are the value
+                else:
+                    raise ValueError(f"Invalid UTXO value length: {len(db_value)}, expected 8 or 9 bytes")
+                
                 return hashX, value
             return [lookup_utxo(*hashX_pair) for hashX_pair in hashX_pairs]
 
