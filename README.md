@@ -20,6 +20,23 @@ arbitrary addresses. The server can be exposed publicly, and joined to the publi
 of servers via peer discovery. As of May 2020, a significant chunk of the public
 Electrum server network runs ElectrumX.
 
+## DIVI Vault Support
+
+This fork includes enhanced support for **DIVI coin** with full **vault transaction** support:
+
+- **DIVI Block Structure**: Handles DIVI's custom 112-byte block headers (vs standard 80 bytes)
+- **Vault Detection**: Automatically identifies and tracks DIVI vault transactions
+- **Enhanced Balance Queries**: Returns separate `vault_balance` and `spendable_balance` in balance responses
+- **UTXO Tracking**: Properly stores and retrieves vault flags with UTXO data
+- **Backward Compatibility**: Maintains compatibility with existing UTXO formats
+
+### DIVI-Specific Features
+
+- Custom block header deserialization with `acc_checkpoint` field support
+- Vault script detection and address extraction (owner/host addresses)
+- Dual hashing support: Quark hash for genesis block, Double SHA256 for subsequent blocks
+- Enhanced transaction parsing with vault metadata
+
 ### Documentation
 
 See [readthedocs](https://electrumx-spesmilo.readthedocs.io).
