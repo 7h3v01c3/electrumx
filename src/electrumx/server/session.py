@@ -1403,6 +1403,11 @@ class ElectrumX(SessionBase):
         '''The minimum fee a low-priority tx must pay in order to be accepted
         to the daemon's memory pool.'''
         self.bump_cost(1.0)
+        
+        # For DIVI, use fixed relay fee instead of asking daemon
+        if hasattr(self.coin, 'RELAY_FEE'):
+            return self.coin.RELAY_FEE
+            
         return await self.daemon_request('relayfee')
 
     async def estimatefee(self, number, mode=None):
@@ -1417,6 +1422,10 @@ class ElectrumX(SessionBase):
         if mode not in self.coin.ESTIMATEFEE_MODES:
             raise RPCError(BAD_REQUEST, f'unknown estimatefee mode: {mode}')
         self.bump_cost(0.1)
+
+        # For DIVI, use fixed fee instead of dynamic estimation
+        if hasattr(self.coin, 'ESTIMATE_FEE'):
+            return self.coin.ESTIMATE_FEE
 
         number = self.coin.bucket_estimatefee_block_target(number)
         cache = self.session_mgr.estimatefee_cache

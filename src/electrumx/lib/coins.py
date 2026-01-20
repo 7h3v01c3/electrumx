@@ -2907,6 +2907,10 @@ class Divi(Coin):
     BASIC_HEADER_SIZE = 112  # 80 bytes standard + 32 bytes acc_checkpoint
     RPC_PORT = 51473
     REORG_LIMIT = 100
+    
+    # DIVI has fixed fees
+    ESTIMATE_FEE = 0.0001  # Fixed fee in DIVI
+    RELAY_FEE = 0.0001     # Fixed relay fee in DIVI
 
     @classmethod
     def header_hash(cls, header):
