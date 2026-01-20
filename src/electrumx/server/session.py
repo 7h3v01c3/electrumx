@@ -1227,10 +1227,23 @@ class ElectrumX(SessionBase):
 
     async def get_balance(self, hashX):
         utxos = await self.db.all_utxos(hashX)
-        confirmed = sum(utxo.value for utxo in utxos)
+        
+        # Calculate vault vs regular balances
+        vault_balance = sum(utxo.value for utxo in utxos if utxo.is_vault)
+        spendable_balance = sum(utxo.value for utxo in utxos if not utxo.is_vault)
+        confirmed = vault_balance + spendable_balance
+        
         unconfirmed = await self.mempool.balance_delta(hashX)
         self.bump_cost(1.0 + len(utxos) / 50)
-        return {'confirmed': confirmed, 'unconfirmed': unconfirmed}
+        
+        return {
+            'confirmed': confirmed,
+            'unconfirmed': unconfirmed,
+            'breakdown': {
+                'vault_balance': vault_balance,
+                'spendable_balance': spendable_balance
+            }
+        }
 
     async def scripthash_get_balance(self, scripthash):
         '''Return the confirmed and unconfirmed balance of a scripthash.'''
@@ -1390,6 +1403,11 @@ class ElectrumX(SessionBase):
         '''The minimum fee a low-priority tx must pay in order to be accepted
         to the daemon's memory pool.'''
         self.bump_cost(1.0)
+        
+        # For DIVI, use fixed relay fee instead of asking daemon
+        if hasattr(self.coin, 'RELAY_FEE'):
+            return self.coin.RELAY_FEE
+            
         return await self.daemon_request('relayfee')
 
     async def estimatefee(self, number, mode=None):
@@ -1404,6 +1422,10 @@ class ElectrumX(SessionBase):
         if mode not in self.coin.ESTIMATEFEE_MODES:
             raise RPCError(BAD_REQUEST, f'unknown estimatefee mode: {mode}')
         self.bump_cost(0.1)
+
+        # For DIVI, use fixed fee instead of dynamic estimation
+        if hasattr(self.coin, 'ESTIMATE_FEE'):
+            return self.coin.ESTIMATE_FEE
 
         number = self.coin.bucket_estimatefee_block_target(number)
         cache = self.session_mgr.estimatefee_cache

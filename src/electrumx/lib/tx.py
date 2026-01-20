@@ -1434,12 +1434,34 @@ class TxPIVX:
         ))
 
 
+class TxOutputDIVI:
+    """Class representing a DIVI transaction output with vault support."""
+    value: int
+    pk_script: bytes
+    script_type: str = "unknown"
+    vault_owner: str = None
+    vault_host: str = None
+
+    def __init__(self, value, pk_script, script_type="unknown", vault_owner=None, vault_host=None):
+        self.value = value
+        self.pk_script = pk_script
+        self.script_type = script_type
+        self.vault_owner = vault_owner
+        self.vault_host = vault_host
+
+    def serialize(self):
+        return b''.join((
+            pack_le_int64(self.value),
+            pack_varbytes(self.pk_script),
+        ))
+
+
 class TxDIVI:
     """Class representing a DIVI transaction."""
     __slots__ = 'version', 'inputs', 'outputs', 'locktime', 'txid', 'wtxid'
     version: int
     inputs: Sequence['TxInput']
-    outputs: Sequence['TxOutput']
+    outputs: Sequence['TxOutputDIVI']
     locktime: int
     txid: bytes
     wtxid: bytes
@@ -1470,13 +1492,46 @@ class DeserializerDIVI(Deserializer):
         start = self.cursor
         version = self._read_le_uint32()
         inputs = self._read_inputs()
-        outputs = self._read_outputs()
+        outputs = self._read_divi_outputs()
         locktime = self._read_le_uint32()
         
         # Calculate transaction ID
         txid = self.TX_HASH_FN(self.binary[start:self.cursor])
         
         return TxDIVI(version, inputs, outputs, locktime, txid, txid)
+    
+    def _read_divi_outputs(self):
+        """Read DIVI outputs with vault detection."""
+        from electrumx.lib.coins import Divi
+        
+        outputs = []
+        for i in range(self._read_varint()):
+            value = self._read_le_uint64()
+            pk_script = self._read_varbytes()
+            
+            # Detect script type and extract vault information
+            script_type = "unknown"
+            vault_owner = None
+            vault_host = None
+            
+            if Divi.is_vault_script(pk_script):
+                script_type = "vault"
+                vault_owner, vault_host = Divi.extract_vault_addresses(pk_script)
+            elif len(pk_script) == 25 and pk_script[0] == 0x76 and pk_script[1] == 0xa9 and pk_script[22] == 0x88 and pk_script[23] == 0xac:
+                script_type = "pubkeyhash"
+            elif len(pk_script) == 23 and pk_script[0] == 0xa9 and pk_script[21] == 0x87:
+                script_type = "scripthash"
+            
+            output = TxOutputDIVI(
+                value=value,
+                pk_script=pk_script,
+                script_type=script_type,
+                vault_owner=vault_owner,
+                vault_host=vault_host
+            )
+            outputs.append(output)
+        
+        return outputs
     
     def read_header(self, static_header_size):
         """Return the DIVI block header bytes (112 bytes total)."""

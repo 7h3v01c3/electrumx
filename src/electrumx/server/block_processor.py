@@ -650,7 +650,15 @@ class BlockProcessor:
         idx_packed = pack_le_uint32(tx_idx)
         cache_value = self.utxo_cache.pop(tx_hash + idx_packed, None)
         if cache_value:
-            return cache_value
+            # Handle both old and new UTXO formats in cache
+            if len(cache_value) == 24:  # HASHX_LEN + TXNUM_LEN + 8
+                # Old format - return as-is
+                return cache_value
+            elif len(cache_value) == 25:  # HASHX_LEN + TXNUM_LEN + 9
+                # New format - strip the vault flag
+                return cache_value[:-1]
+            else:
+                raise ChainError(f'Invalid cached UTXO length: {len(cache_value)}')
 
         # Spend it from the DB.
         txnum_padding = bytes(8-TXNUM_LEN)
@@ -679,7 +687,16 @@ class BlockProcessor:
                 # Remove both entries for this UTXO
                 self.db_deletes.append(hdb_key)
                 self.db_deletes.append(udb_key)
-                return hashX + tx_num_packed + utxo_value_packed
+                
+                # Handle both old and new UTXO formats
+                if len(utxo_value_packed) == 8:
+                    # Old format - just the value
+                    return hashX + tx_num_packed + utxo_value_packed
+                elif len(utxo_value_packed) == 9:
+                    # New format - strip the vault flag
+                    return hashX + tx_num_packed + utxo_value_packed[:8]
+                else:
+                    raise ChainError(f'Invalid UTXO value length: {len(utxo_value_packed)}')
 
         raise ChainError(f'UTXO {hash_to_hex_str(tx_hash)} / {tx_idx:,d} not '
                          f'found in "h" table')
@@ -900,7 +917,7 @@ class LTORBlockProcessor(BlockProcessor):
 
 
 class DiviBlockProcessor(BlockProcessor):
-    """Custom block processor for DIVI coin that handles the acc_checkpoint field."""
+    """Custom block processor for DIVI coin that handles vault transactions and acc_checkpoint field."""
     
     def advance_blocks(self, blocks: Sequence['Block']):
         """Override to handle DIVI's custom block structure."""
@@ -923,3 +940,41 @@ class DiviBlockProcessor(BlockProcessor):
         self.tip = self.coin.header_hash(headers[-1])
         self.tip_advanced_event.set()
         self.tip_advanced_event.clear()
+
+    def advance_txs(self, txs: Sequence[Tx], is_unspendable: Callable[[bytes], bool]) -> Sequence[bytes]:
+        """Override to handle DIVI vault transactions with vault flag storage."""
+        # Call the parent method to handle all the standard logic
+        undo_info = super().advance_txs(txs, is_unspendable)
+        
+        # Now update the UTXOs we just created to include vault flags
+        tx_num = self.tx_count - len(txs)
+        put_utxo = self.utxo_cache.__setitem__
+        to_le_uint32 = pack_le_uint32
+        to_le_uint64 = pack_le_uint64
+        script_hashX = self.coin.hashX_from_script
+        
+        for tx in txs:
+            tx_hash = tx.txid
+            
+            # Update UTXOs with vault flags
+            for idx, txout in enumerate(tx.outputs):
+                # Ignore unspendable outputs
+                if is_unspendable(txout.pk_script):
+                    continue
+                
+                # Get the hashX for this output
+                hashX = script_hashX(txout.pk_script)
+                
+                # Check if this is a vault UTXO by examining the script directly
+                is_vault = self.coin.is_vault_script(txout.pk_script)
+                
+                # Create complete UTXO with vault flag
+                vault_flag = 1 if is_vault else 0
+                tx_numb = to_le_uint64(tx_num)[:TXNUM_LEN]
+                utxo_value = to_le_uint64(txout.value) + bytes([vault_flag])
+                complete_utxo = hashX + tx_numb + utxo_value
+                put_utxo(tx_hash + to_le_uint32(idx), complete_utxo)
+            
+            tx_num += 1
+        
+        return undo_info
