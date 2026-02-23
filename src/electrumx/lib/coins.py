@@ -3184,7 +3184,7 @@ class DiviTestnet(Divi):
     P2PKH_VERBYTE = bytes.fromhex("8b")
     P2SH_VERBYTE = bytes.fromhex("13")
     WIF_BYTE = bytes.fromhex("ef")
-    RPC_PORT = 51472
+    RPC_PORT = 51474
     TX_COUNT_HEIGHT = 1
     TX_COUNT = 1
 
