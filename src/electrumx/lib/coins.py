@@ -3174,6 +3174,21 @@ class Divi(Coin):
         deserializer = cls.DESERIALIZER(block)
         return deserializer.read_header(cls.BASIC_HEADER_SIZE)
 
+
+class DiviTestnet(Divi):
+    """DIVI testnet; same behavior as Divi, chain params below."""
+    NET = "testnet"
+    XPUB_VERBYTES = bytes.fromhex("3a8061a0")
+    XPRV_VERBYTES = bytes.fromhex("3a805837")
+    GENESIS_HASH = '00000f43b54bbcae395d815b255ac4ed0693bca7987d72b873d5d4b68d73a6bd'  # replace with actual testnet genesis
+    P2PKH_VERBYTE = bytes.fromhex("8b")
+    P2SH_VERBYTE = bytes.fromhex("13")
+    WIF_BYTE = bytes.fromhex("ef")
+    RPC_PORT = 51472
+    TX_COUNT_HEIGHT = 1
+    TX_COUNT = 1
+
+
 class Pivx(Coin):
     NAME = "PIVX"
     SHORTNAME = "PIVX"
