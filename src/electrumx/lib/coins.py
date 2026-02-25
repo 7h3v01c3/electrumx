@@ -2923,21 +2923,23 @@ class Divi(Coin):
         is_genesis = all(b == 0 for b in prevhash)
         
         if is_genesis:
-            # Genesis block uses Quark hash on 80-byte header only
+            # Genesis block uses Quark hash on 80-byte header only (no fallback - wrong hash otherwise)
             if len(header) < 80:
                 raise ValueError(f"Genesis header too short: {len(header)} bytes, expected 80")
-            
             try:
                 import quark_hash
                 return quark_hash.getPoWHash(header[:80])
-            except ImportError:
-                try:
-                    import pivx_quark_hash as quark_hash
-                    return quark_hash.getPoWHash(header[:80])
-                except ImportError:
-                    # Fallback to double SHA256
-                    from electrumx.lib.hash import double_sha256
-                    return double_sha256(header[:80])
+            except (ImportError, SystemError, AttributeError):
+                pass
+            try:
+                import pivx_quark_hash as quark_hash
+                return quark_hash.getPoWHash(header[:80])
+            except (ImportError, SystemError):
+                pass
+            raise CoinError(
+                'DIVI genesis requires Quark hash. Install pivx_quark_hash (see README/setup notes). '
+                'Do not use double_sha256 for genesis.'
+            )
         else:
             # Other blocks use double SHA256 on full 112-byte header
             if len(header) < 112:
@@ -3180,7 +3182,7 @@ class DiviTestnet(Divi):
     NET = "testnet"
     XPUB_VERBYTES = bytes.fromhex("3a8061a0")
     XPRV_VERBYTES = bytes.fromhex("3a805837")
-    GENESIS_HASH = '00000f43b54bbcae395d815b255ac4ed0693bca7987d72b873d5d4b68d73a6bd'  # replace with actual testnet genesis
+    GENESIS_HASH = '00000f43b54bbcae395d815b255ac4ed0693bca7987d72b873d5d4b68d73a6bd'
     P2PKH_VERBYTE = bytes.fromhex("8b")
     P2SH_VERBYTE = bytes.fromhex("13")
     WIF_BYTE = bytes.fromhex("ef")
