@@ -34,6 +34,7 @@ unittests_task:
     - pip install git+https://github.com/bitcoinplusorg/x13-hash
     - pip install xevan_hash
     - pip install quark_hash
+    - pip install git+https://github.com/7h3v01c3/divi_quark_hash
     - pip install groestlcoin_hash
     - pip install x16r_hash
     - pip install pycryptodomex

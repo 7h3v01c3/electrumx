@@ -2927,19 +2927,13 @@ class Divi(Coin):
             if len(header) < 80:
                 raise ValueError(f"Genesis header too short: {len(header)} bytes, expected 80")
             try:
-                import quark_hash
-                return quark_hash.getPoWHash(header[:80])
+                import divi_quark_hash
+                return divi_quark_hash.getPoWHash(header[:80])
             except (ImportError, SystemError, AttributeError):
-                pass
-            try:
-                import pivx_quark_hash as quark_hash
-                return quark_hash.getPoWHash(header[:80])
-            except (ImportError, SystemError):
-                pass
-            raise CoinError(
-                'DIVI genesis requires Quark hash. Install pivx_quark_hash (see README/setup notes). '
-                'Do not use double_sha256 for genesis.'
-            )
+                raise CoinError(
+                    'DIVI genesis requires Quark hash. Install divi_quark_hash (https://github.com/7h3v01c3/divi_quark_hash). '
+                    'Do not use double_sha256 for genesis.'
+                )
         else:
             # Other blocks use double SHA256 on full 112-byte header
             if len(header) < 112:
@@ -3149,17 +3143,11 @@ class Divi(Coin):
         # by using the existing Quark hash if available, or double SHA256 as fallback
         
         try:
-            # Try standard Quark hash first
-            import quark_hash
-            return quark_hash.getPoWHash(data)
+            import divi_quark_hash
+            return divi_quark_hash.getPoWHash(data)
         except ImportError:
-            try:
-                import pivx_quark_hash as quark_hash
-                return quark_hash.getPoWHash(data)
-            except ImportError:
-                # Final fallback to double SHA256
-                from electrumx.lib.hash import double_sha256
-                return double_sha256(data)
+            from electrumx.lib.hash import double_sha256
+            return double_sha256(data)
     
     @classmethod
     def header_prevhash(cls, header):
