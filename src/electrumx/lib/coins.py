@@ -3130,18 +3130,7 @@ class Divi(Coin):
 
     @classmethod
     def _divi_hash_quark(cls, data):
-        '''Implement DIVI's custom HashQuark algorithm from core code'''
-        # This implements the exact HashQuark function from DIVI core
-        # The algorithm uses multiple hash functions in sequence with conditional branching
-        
-        # For now, we'll use a simplified approach that should work
-        # The full implementation would require implementing all the SPH hash functions
-        # (blake, bmw, groestl, jh, keccak, skein) in Python
-        
-        # Since we don't have the full SPH implementations in Python,
-        # we'll use a workaround that should produce the correct result
-        # by using the existing Quark hash if available, or double SHA256 as fallback
-        
+        '''Quark PoW hash via divi_quark_hash, or double_sha256.'''
         try:
             import divi_quark_hash
             return divi_quark_hash.getPoWHash(data)
@@ -3151,9 +3140,7 @@ class Divi(Coin):
     
     @classmethod
     def header_prevhash(cls, header):
-        '''Given a DIVI header return previous hash'''
-        # DIVI header structure: version(4) + prev_hash(32) + merkle_root(32) + timestamp(4) + bits(4) + nonce(4) + acc_checkpoint(32)
-        # Previous hash is at bytes 4-36 (same as standard Bitcoin)
+        '''Return previous block hash from header (bytes 4-36).'''
         if len(header) < 36:
             raise ValueError(f"DIVI header too short: {len(header)} bytes")
         return header[4:36]
