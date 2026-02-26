@@ -2923,21 +2923,17 @@ class Divi(Coin):
         is_genesis = all(b == 0 for b in prevhash)
         
         if is_genesis:
-            # Genesis block uses Quark hash on 80-byte header only
+            # Genesis block uses Quark hash on 80-byte header only (no fallback - wrong hash otherwise)
             if len(header) < 80:
                 raise ValueError(f"Genesis header too short: {len(header)} bytes, expected 80")
-            
             try:
-                import quark_hash
-                return quark_hash.getPoWHash(header[:80])
-            except ImportError:
-                try:
-                    import pivx_quark_hash as quark_hash
-                    return quark_hash.getPoWHash(header[:80])
-                except ImportError:
-                    # Fallback to double SHA256
-                    from electrumx.lib.hash import double_sha256
-                    return double_sha256(header[:80])
+                import divi_quark_hash
+                return divi_quark_hash.getPoWHash(header[:80])
+            except (ImportError, SystemError, AttributeError):
+                raise CoinError(
+                    'DIVI genesis requires Quark hash. Install divi_quark_hash (https://github.com/7h3v01c3/divi_quark_hash). '
+                    'Do not use double_sha256 for genesis.'
+                )
         else:
             # Other blocks use double SHA256 on full 112-byte header
             if len(header) < 112:
@@ -3134,36 +3130,17 @@ class Divi(Coin):
 
     @classmethod
     def _divi_hash_quark(cls, data):
-        '''Implement DIVI's custom HashQuark algorithm from core code'''
-        # This implements the exact HashQuark function from DIVI core
-        # The algorithm uses multiple hash functions in sequence with conditional branching
-        
-        # For now, we'll use a simplified approach that should work
-        # The full implementation would require implementing all the SPH hash functions
-        # (blake, bmw, groestl, jh, keccak, skein) in Python
-        
-        # Since we don't have the full SPH implementations in Python,
-        # we'll use a workaround that should produce the correct result
-        # by using the existing Quark hash if available, or double SHA256 as fallback
-        
+        '''Quark PoW hash via divi_quark_hash, or double_sha256.'''
         try:
-            # Try standard Quark hash first
-            import quark_hash
-            return quark_hash.getPoWHash(data)
+            import divi_quark_hash
+            return divi_quark_hash.getPoWHash(data)
         except ImportError:
-            try:
-                import pivx_quark_hash as quark_hash
-                return quark_hash.getPoWHash(data)
-            except ImportError:
-                # Final fallback to double SHA256
-                from electrumx.lib.hash import double_sha256
-                return double_sha256(data)
+            from electrumx.lib.hash import double_sha256
+            return double_sha256(data)
     
     @classmethod
     def header_prevhash(cls, header):
-        '''Given a DIVI header return previous hash'''
-        # DIVI header structure: version(4) + prev_hash(32) + merkle_root(32) + timestamp(4) + bits(4) + nonce(4) + acc_checkpoint(32)
-        # Previous hash is at bytes 4-36 (same as standard Bitcoin)
+        '''Return previous block hash from header (bytes 4-36).'''
         if len(header) < 36:
             raise ValueError(f"DIVI header too short: {len(header)} bytes")
         return header[4:36]
@@ -3173,6 +3150,21 @@ class Divi(Coin):
         '''Return the DIVI block header bytes'''
         deserializer = cls.DESERIALIZER(block)
         return deserializer.read_header(cls.BASIC_HEADER_SIZE)
+
+
+class DiviTestnet(Divi):
+    """DIVI testnet; same behavior as Divi, chain params below."""
+    NET = "testnet"
+    XPUB_VERBYTES = bytes.fromhex("3a8061a0")
+    XPRV_VERBYTES = bytes.fromhex("3a805837")
+    GENESIS_HASH = '00000f43b54bbcae395d815b255ac4ed0693bca7987d72b873d5d4b68d73a6bd'
+    P2PKH_VERBYTE = bytes.fromhex("8b")
+    P2SH_VERBYTE = bytes.fromhex("13")
+    WIF_BYTE = bytes.fromhex("ef")
+    RPC_PORT = 51474
+    TX_COUNT_HEIGHT = 1
+    TX_COUNT = 1
+
 
 class Pivx(Coin):
     NAME = "PIVX"

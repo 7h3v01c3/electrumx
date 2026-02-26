@@ -37,6 +37,26 @@ This fork includes enhanced support for **DIVI coin** with full **vault transact
 - Dual hashing support: Quark hash for genesis block, Double SHA256 for subsequent blocks
 - Enhanced transaction parsing with vault metadata
 
+### Running DIVI
+
+- **Mainnet** (default): Set `COIN=Divi`; `NET` defaults to `mainnet`. Use your mainnet daemon and a dedicated `DB_DIRECTORY`.
+- **Testnet**: Set `COIN=Divi` and `NET=testnet`. Use a **separate** `DB_DIRECTORY` (e.g. `db_testnet`) and point `DAEMON_URL` at your testnet daemon (default RPC port 51474). Same vault and block behaviour as mainnet; only chain params differ.
+
+Example start script (mainnet by default; set `NET=testnet` and daemon port 51474 for testnet):
+
+```bash
+#!/bin/bash
+source /path/to/electrumx-venv/bin/activate
+export COIN=Divi
+export NET=${NET:-mainnet}
+export DB_DIRECTORY=~/electrumx/db_${NET}
+export DAEMON_URL="http://rpcuser:rpcpass@127.0.0.1:51473"
+export DB_ENGINE=leveldb
+export LOG_LEVEL=INFO
+export SERVICES="tcp://127.0.0.1:50002"
+cd ~/electrumx && ./electrumx_server
+```
+
 ### Documentation
 
 See [readthedocs](https://electrumx-spesmilo.readthedocs.io).
