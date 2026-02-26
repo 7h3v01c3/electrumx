@@ -2968,25 +2968,18 @@ class Divi(Coin):
 
     @classmethod
     def extract_vault_addresses(cls, script):
-        '''Extract owner and host addresses from a vault script.
-        
-        Returns:
-            tuple: (owner_address, host_address) or (None, None) if not a vault script
-        '''
+        '''(vault_owner, vault_host) as base58 addresses, or (None, None) if not a vault script.
+        Vault script op_codes encode owner and host as hash160; we decode to base58 addresses.'''
         if not cls.is_vault_script(script):
             return None, None
-            
         try:
             # Extract owner key hash160 (bytes 2-22)
             owner_hash160 = script[2:22]
             # Extract host key hash160 (bytes 25-45)
             host_hash160 = script[25:45]
-            
-            # Convert hash160 to addresses
-            owner_address = cls.hash160_to_P2PKH_address(owner_hash160)
-            host_address = cls.hash160_to_P2PKH_address(host_hash160)
-            
-            return owner_address, host_address
+            vault_owner = cls.hash160_to_P2PKH_address(owner_hash160)
+            vault_host = cls.hash160_to_P2PKH_address(host_hash160)
+            return vault_owner, vault_host
         except Exception:
             return None, None
 
@@ -2998,50 +2991,26 @@ class Divi(Coin):
 
     @classmethod
     def vault_script_hash(cls, script):
-        '''Generate script hash for vault using owner key only.
-        
-        For vault scripts, we use the owner key (first 20 bytes after OP_IF)
-        to generate the script hash for balance queries.
-        '''
+        '''HashX for balance: use vault_owner hash160 from script (bytes 2-22).'''
         if not cls.is_vault_script(script):
             return None
-            
         # Extract owner key hash160 (bytes 2-22)
         owner_hash160 = script[2:22]
-        
-        # Create P2PKH script for owner key
         owner_script = cls.hash160_to_P2PKH_script(owner_hash160)
-        
-        # Return hashX for the owner script
         return cls.hashX_from_script(owner_script)
 
     @classmethod
     def hashX_from_script(cls, script):
-        '''Override to handle vault scripts specially.
-        
-        For vault scripts, use owner key only for balance queries.
-        For other scripts, use standard behavior.
-        '''
+        '''Vault scripts use owner key for balance; others use standard hashX.'''
         if cls.is_vault_script(script):
             return cls.vault_script_hash(script)
-        else:
-            return super().hashX_from_script(script)
+        return super().hashX_from_script(script)
 
     @classmethod
     def analyze_transaction_outputs(cls, outputs):
-        '''Analyze transaction outputs to detect vault vs regular transactions.
-        
-        Args:
-            outputs: List of transaction outputs (TxOutputDIVI objects)
-            
-        Returns:
-            dict: Analysis results with vault_balance, spendable_balance, has_vault, has_regular
-        '''
-        vault_balance = 0
-        spendable_balance = 0
-        has_vault = False
-        has_regular = False
-        
+        '''Sum vault vs spendable from outputs; return balances and has_vault/has_regular flags.'''
+        vault_balance = spendable_balance = 0
+        has_vault = has_regular = False
         for output in outputs:
             if hasattr(output, 'script_type') and output.script_type == 'vault':
                 vault_balance += output.value
@@ -3049,7 +3018,6 @@ class Divi(Coin):
             else:
                 spendable_balance += output.value
                 has_regular = True
-        
         return {
             'vault_balance': vault_balance,
             'spendable_balance': spendable_balance,
@@ -3059,14 +3027,7 @@ class Divi(Coin):
 
     @classmethod
     def is_vault_transaction(cls, outputs):
-        '''Check if a transaction contains vault outputs.
-        
-        Args:
-            outputs: List of transaction outputs (TxOutputDIVI objects)
-            
-        Returns:
-            bool: True if transaction has vault outputs
-        '''
+        '''True if any output is a vault output.'''
         for output in outputs:
             if hasattr(output, 'script_type') and output.script_type == 'vault':
                 return True
@@ -3074,58 +3035,24 @@ class Divi(Coin):
 
     @classmethod
     def get_vault_metadata(cls, outputs):
-        '''Extract vault metadata from transaction outputs.
-        
-        Args:
-            outputs: List of transaction outputs (TxOutputDIVI objects)
-            
-        Returns:
-            dict: Vault metadata including owner_key, host_key, vault_count
-        '''
-        vault_metadata = {
-            'owner_key': None,
-            'host_key': None,
-            'vault_count': 0
-        }
-        
+        '''vault_owner, vault_host (base58), vault_count from vault outputs.'''
+        vault_metadata = {'vault_owner': None, 'vault_host': None, 'vault_count': 0}
         for output in outputs:
             if hasattr(output, 'script_type') and output.script_type == 'vault':
                 vault_metadata['vault_count'] += 1
                 if hasattr(output, 'vault_owner') and output.vault_owner:
-                    vault_metadata['owner_key'] = output.vault_owner
+                    vault_metadata['vault_owner'] = output.vault_owner
                 if hasattr(output, 'vault_host') and output.vault_host:
-                    vault_metadata['host_key'] = output.vault_host
-        
+                    vault_metadata['vault_host'] = output.vault_host
         return vault_metadata
 
     @classmethod
     def analyze_address_history(cls, address, transaction_history, db):
-        '''Analyze address history to determine vault vs regular transaction breakdown.
-        
-        This method would be used by the HTTP wrapper to provide enhanced balance responses.
-        
-        Args:
-            address: DIVI address to analyze
-            transaction_history: List of (tx_hash, height) tuples from ElectrumX
-            db: Database connection for transaction details
-            
-        Returns:
-            dict: Enhanced balance information with vault breakdown
-        '''
-        # This is a placeholder for the HTTP wrapper implementation
-        # The actual implementation would:
-        # 1. Query transaction details for each tx_hash
-        # 2. Parse outputs to detect vault vs regular transactions
-        # 3. Calculate vault_balance vs spendable_balance
-        # 4. Return enhanced response format
-        
+        '''Stub: vault/spendable breakdown for address (used by HTTP wrapper).'''
         return {
             'confirmed': 0,
             'unconfirmed': 0,
-            'breakdown': {
-                'vault_balance': 0,
-                'spendable_balance': 0
-            }
+            'breakdown': {'vault_balance': 0, 'spendable_balance': 0}
         }
 
     @classmethod
